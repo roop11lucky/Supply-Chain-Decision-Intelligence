@@ -5,9 +5,10 @@ import plotly.graph_objects as go
 import streamlit as st
 import networkx as nx
 from engine.core import NODES,EVENTS,graph,affected_nodes,exposure,options,recommendation,explain
+from engine.optimizer import BOM,SOURCES,plan_recovery,sensitivity
 
 st.set_page_config(page_title='Supply Chain Decision Intelligence | POC',page_icon='🔗',layout='wide')
-st.title('🔗 Supply Chain Decision Intelligence')
+st.title('🔗 Supply Chain Decision Intelligence · V2')
 st.caption('Disruption → Dependencies → Exposure → Scenario Comparison → Explainable Recommendation → Human Approval')
 st.warning('**Portfolio demonstration:** All suppliers, customers, inventory, demand, costs and disruptions are synthetic. Recommendations are deterministic scenario calculations, not production AI or validated operational forecasts.',icon='🧪')
 
@@ -21,14 +22,19 @@ with st.sidebar:
  budget=st.slider('Maximum response budget ($)',0,500000,250000,10000)
  service=st.slider('Minimum required service level (%)',60,100,85,1)/100
  st.caption('Changing any input recalculates the impact and options.')
+ st.header('3 · V2 capacity assumptions')
+ supplier_capacity=st.slider('Alternate supplier capacity (%)',50,150,100,5)/100
+ transport_capacity=st.slider('Transport capacity (%)',50,150,100,5)/100
+ extra_delay=st.slider('Additional response delay (days)',0,7,0)
 
 factor=1+demand/100
 impacted=affected_nodes(info['node'])
 opts,exp=options(info['node'],days,factor,budget,service)
 rec=recommendation(opts)
+optimized=plan_recovery(info['node'],days,factor,budget,service,supplier_capacity,transport_capacity,extra_delay)
 labels={node:label for node,_,label in NODES}
 
-pages=st.tabs(['🚨 Event & KPIs','🕸️ Dependency Graph','📉 Business Impact','⚖️ Response Scenarios','🧠 Decision Explanation','✅ Governance & Audit','📚 Model Notes'])
+pages=st.tabs(['🚨 Event & KPIs','🕸️ Dependency Graph','📉 Business Impact','⚖️ Response Scenarios','🧠 Decision Explanation','✅ Governance & Audit','📚 Model Notes','🧩 BOM & Capacity','🧮 Recovery Optimizer','📊 Sensitivity Analysis'])
 with pages[0]:
  st.subheader(event)
  st.write(info['description'])
@@ -116,6 +122,48 @@ with pages[6]:
  st.subheader('What this POC proves—and what it does not')
  st.markdown('''**Implemented:** deterministic event propagation through a directed dependency graph; inventory coverage and economic exposure calculations; transparent response scenarios; budget/service constraints; cost-based recommendation; approval/rejection with session audit export.
 
-**Not implemented:** real ERP/WMS/TMS integration; verified multi-tier supplier discovery; dynamic shipment ETAs; supplier qualification workflow; constrained transport network optimization; probabilistic event modeling; true operational digital twin; external AI/LLM; persistent enterprise audit; automatic procurement execution.
+**V2 adds:** product-component BOM visibility, supplier/route capacities, qualified recovery sources, lead-time constraints, linear-programming recovery allocations, budget-limited optimization and sensitivity analysis.\n\n**Not implemented:** real ERP/WMS/TMS integration; verified multi-tier supplier discovery; dynamic shipment ETAs; supplier qualification workflow; constrained transport network optimization; probabilistic event modeling; true operational digital twin; external AI/LLM; persistent enterprise audit; automatic procurement execution.
 
 **Model limitations:** response recovery percentages and costs are illustrative assumptions. Service level is calculated against affected-product demand during the disruption. Revenue exposure is not booked revenue loss. Reallocation ignores donor-network impacts. Use for demonstrations, not real procurement decisions.''')
+
+with pages[7]:
+ st.subheader('V2 · Bill of materials and operational capacity')
+ st.caption('BOM links products to components. Only High-criticality bottleneck components drive V2 recovery; secondary BOM lines are shown for visibility but not independently optimized.')
+ st.markdown('**Product-to-component BOM**')
+ st.dataframe(BOM.assign(product=BOM['product'].map(labels),component=BOM['component'].map(labels)),hide_index=True,use_container_width=True)
+ st.markdown('**Qualified recovery sources and transport lanes**')
+ st.dataframe(SOURCES,hide_index=True,use_container_width=True)
+ st.info('Capacity is shared across eligible products. Transfer capacity is already net of protected donor stock; lead times and route limits constrain recovery. All values are synthetic.')
+with pages[8]:
+ st.subheader('V2 · Capacity-aware recovery optimization')
+ a,b,c,d=st.columns(4)
+ a.metric('Baseline service',f'{optimized.baseline_service:.1%}')
+ b.metric('Optimized service',f'{optimized.service_level:.1%}',delta=f'{(optimized.service_level-optimized.baseline_service)*100:.1f} pp')
+ c.metric('Response spend',f'${optimized.total_cost:,.0f}')
+ d.metric('Remaining margin exposure',f'${optimized.margin_remaining:,.0f}')
+ if optimized.feasible:st.success(optimized.note)
+ else:st.error(optimized.note)
+ st.markdown('**Recommended allocation by source and product**')
+ if optimized.allocations.empty:st.info('No economically beneficial eligible recovery allocations under current constraints.')
+ else:
+  display=optimized.allocations.copy()
+  display['product']=display['product'].map(labels)
+  st.dataframe(display[['source','product','component','kind','route','lead_days','recovered_product_units','component_units','incremental_cost','avoided_margin']].round(1),hide_index=True,use_container_width=True)
+  st.bar_chart(display.groupby('source')[['recovered_product_units']].sum())
+ st.markdown('**Residual exposure by product**')
+ shown=optimized.product_impact.copy()
+ shown['product']=shown['product'].map(labels)
+ st.dataframe(shown[['product','horizon_demand','at_risk_units','recovered_units','remaining_units','remaining_margin']].round(1),hide_index=True,use_container_width=True)
+ st.markdown('**Constraint utilization**')
+ if not optimized.constraints.empty:
+  st.dataframe(optimized.constraints.round(2),hide_index=True,use_container_width=True)
+  binding=optimized.constraints[optimized.constraints.binding]
+  st.caption('Binding constraints: '+(', '.join(binding.constraint.tolist()) if not binding.empty else 'None'))
+ st.caption('Linear programming minimizes response spend + uncovered contribution margin. The minimum service level is a hard solver constraint when feasible; if infeasible, a diagnostic maximum-recovery plan is shown and flagged as NOT meeting the target. This is a simplified component recovery model, not an ERP-grade production scheduler.')
+with pages[9]:
+ st.subheader('V2 · Supplier capacity sensitivity')
+ st.write('How does changing alternate supplier capacity affect service and spend, holding other inputs fixed?')
+ sens=sensitivity(info['node'],days,factor,budget,service)
+ st.dataframe(sens.assign(service_level=sens.service_level.map(lambda v:f'{v:.1%}')),hide_index=True,use_container_width=True)
+ st.line_chart(sens.set_index('supplier_capacity')[['service_level']])
+ st.caption('Sensitivity runs vary supplier capacity from 50% to 150% of synthetic baseline; transport capacity uses baseline in this chart. This is deterministic what-if analysis, not probabilistic forecasting.')
