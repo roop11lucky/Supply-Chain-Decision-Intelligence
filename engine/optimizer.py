@@ -67,6 +67,14 @@ def plan_recovery(event_node, disruption_days, demand_factor=1.0, budget=250000,
     # other BOM components are assumed available. This is not full multi-component production scheduling.
     candidates=[]
     for si,s in SOURCES.iterrows():
+        # A plant outage cannot be fixed by adding upstream components to the same
+        # unavailable assembly line. Plant transfer/restart planning is out of scope.
+        if event_node in ('PLANT_BLR','PLANT_PUN'):
+            continue
+        # Shenzhen-origin emergency freight is not an independent workaround
+        # when Shenzhen Port or its upstream storm event is disrupted.
+        if event_node in ('PORT_SZ','STORM_SZ') and str(s['route']).startswith('Shenzhen'):
+            continue
         lead=float(s.lead_days)+extra_delay_days
         if lead >= disruption_days:continue
         if s.qualification not in ('Qualified','Approved transfer','Approved emergency'):continue

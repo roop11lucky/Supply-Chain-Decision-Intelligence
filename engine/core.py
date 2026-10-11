@@ -5,7 +5,7 @@ import networkx as nx
 import pandas as pd
 
 NODES = [
- ('PORT_SZ','Port','Shenzhen Port'),('PORT_SG','Port','Singapore Port'),
+ ('PORT_SZ','Port','Shenzhen Port'),('PORT_SG','Port','Singapore Port'),('STORM_SZ','Risk event','South China Sea Storm'),('CYBER_T2','Risk event','Supplier Cyber Incident'),('SUP_T2B','Tier 2','Eastern Sensor Materials'),
  ('SUP_T2','Tier 2','Precision Materials'),('SUP_T1','Tier 1','Apex Components'),
  ('SUP_ALT','Tier 1','Nova Components (qualified)'),
  ('CMP_C109','Component','Controller C109'),('CMP_C210','Component','Sensor C210'),
@@ -14,7 +14,7 @@ NODES = [
  ('CUST_A','Customer','Enterprise Customer A'),('CUST_B','Customer','Enterprise Customer B')]
 # Dependency direction: upstream -> downstream. Route edges are for propagation only.
 EDGES = [
- ('PORT_SZ','SUP_T2'),('SUP_T2','SUP_T1'),('SUP_T1','CMP_C109'),
+ ('STORM_SZ','PORT_SZ'),('CYBER_T2','SUP_T2'),('PORT_SZ','SUP_T2'),('SUP_T2B','SUP_T1'),('SUP_T2','SUP_T1'),('SUP_T1','CMP_C109'),
  ('SUP_T1','CMP_C210'),('CMP_C109','PLANT_BLR'),('CMP_C210','PLANT_PUN'),
  ('PLANT_BLR','PROD_P20'),('PLANT_PUN','PROD_P30'),
  ('PROD_P20','CUST_A'),('PROD_P30','CUST_B'),
@@ -28,6 +28,13 @@ EVENTS = {
  'Shenzhen port disruption': {'node':'PORT_SZ','days':14,'description':'Inbound material flow through Shenzhen interrupted'},
  'Tier-2 material supplier outage': {'node':'SUP_T2','days':12,'description':'Precision Materials stops shipments'},
  'Tier-1 component supplier outage': {'node':'SUP_T1','days':10,'description':'Apex Components temporarily unavailable'},
+ 'Severe coastal storm affecting Shenzhen': {'node':'STORM_SZ','days':16,'description':'Synthetic storm scenario interrupts Shenzhen inbound supply lanes'},
+ 'Tier-2 supplier cybersecurity incident': {'node':'CYBER_T2','days':9,'description':'Synthetic ransomware incident interrupts Tier-2 order fulfillment'},
+ 'Sensor raw-material shortage': {'node':'SUP_T2B','days':11,'description':'Eastern Sensor Materials stops feeding Tier-1 production'},
+ 'Controller C109 quality hold': {'node':'CMP_C109','days':8,'description':'Component C109 is quarantined for quality investigation'},
+ 'Sensor C210 quality hold': {'node':'CMP_C210','days':8,'description':'Component C210 is quarantined for quality investigation'},
+ 'Bengaluru plant outage': {'node':'PLANT_BLR','days':7,'description':'Bengaluru assembly is temporarily unavailable'},
+ 'Pune plant outage': {'node':'PLANT_PUN','days':7,'description':'Pune assembly is temporarily unavailable'},
 }
 
 

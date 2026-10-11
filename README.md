@@ -76,3 +76,10 @@ Run automated checks:
 ```bash
 python -m unittest discover -s tests -v
 ```
+
+
+## V3 — Decision Orchestration
+
+V3 extends V2 with ten event scenarios (port, supplier, cyber, weather, component-quality, and plant interruptions), optimizer-linked human approval, plan fingerprinting, an exportable decision packet, session-only approval audit, and a grounded deterministic decision copilot. No external LLM or ERP integrations are used. All business data is synthetic.
+
+**Governance:** Approval now refers to the actual V2 LP allocation, not the V1 predefined scenario. Plans failing the modeled service constraint cannot be approved. Plan IDs hash the event, constraints, allocations, and results. The session audit is not persistent across restarts and should not be treated as enterprise compliance storage.
